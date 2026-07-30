@@ -1,6 +1,7 @@
 package com.example.inkhelper;
 
 import android.Manifest;
+import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.res.ColorStateList;
@@ -9,6 +10,7 @@ import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.PowerManager;
 import android.provider.Settings;
 import android.text.TextUtils;
 import android.text.format.DateFormat;
@@ -67,7 +69,6 @@ public final class MainActivity extends AppCompatActivity {
         requestNotificationPermissionIfNeeded();
         RuntimeRole restoredRole = readRole();
         runtime.restoreRole(restoredRole);
-        updateReceiverBackgroundService(restoredRole);
 
         ScrollView scrollView = new ScrollView(this);
         scrollView.setFillViewport(true);
@@ -123,23 +124,18 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     private void selectRole(RuntimeRole role) {
+        RuntimeRole previousRole = runtime.activeRole();
         getSharedPreferences(PREFERENCES, MODE_PRIVATE).edit().putString(ROLE_KEY, role.name()).apply();
         runtime.selectRole(role);
-        updateReceiverBackgroundService(role);
+        if (previousRole != role) {
+            SessionForegroundService.stop(this);
+        }
         render(role);
     }
 
     private RuntimeRole readRole() {
         SharedPreferences preferences = getSharedPreferences(PREFERENCES, MODE_PRIVATE);
         return RuntimeRole.fromStoredValue(preferences.getString(ROLE_KEY, null));
-    }
-
-    private void updateReceiverBackgroundService(RuntimeRole role) {
-        if (role == RuntimeRole.RECEIVER) {
-            ReceiverBackgroundService.start(this);
-        } else {
-            ReceiverBackgroundService.stop(this);
-        }
     }
 
     private void render(RuntimeRole role) {
@@ -201,11 +197,15 @@ public final class MainActivity extends AppCompatActivity {
         }
         LinearLayout actions = horizontalRow();
         actions.addView(actionButton(getString(R.string.start_sender_session), true, view -> {
-            runtime.startSenderSession();
+            LocalSessionDetails startedDetails = runtime.startSenderSession();
+            if (startedDetails != null) {
+                SessionForegroundService.start(this, RuntimeRole.SENDER);
+            }
             render(RuntimeRole.SENDER);
         }), weightedParams());
         actions.addView(actionButton(getString(R.string.disconnect_session), false, view -> {
             runtime.disconnectActiveSession();
+            SessionForegroundService.stop(this);
             render(RuntimeRole.SENDER);
         }), weightedParams());
         sessionSection.addView(actions);
@@ -237,6 +237,7 @@ public final class MainActivity extends AppCompatActivity {
         }
         sessionSection.addView(actionButton(getString(R.string.disconnect_session), false, view -> {
             runtime.disconnectActiveSession();
+            SessionForegroundService.stop(this);
             render(RuntimeRole.RECEIVER);
         }), matchParams());
 
@@ -302,6 +303,7 @@ public final class MainActivity extends AppCompatActivity {
         } else {
             panel.addView(bodyText(getString(R.string.role_not_selected)));
         }
+        addBackgroundSettings(panel);
 
         new AlertDialog.Builder(this)
                 .setTitle(R.string.settings_label)
@@ -348,6 +350,19 @@ public final class MainActivity extends AppCompatActivity {
         panel.addView(transferSection, dialogSectionParams());
     }
 
+    private void addBackgroundSettings(LinearLayout panel) {
+        LinearLayout backgroundSection = settingsSection(
+                getString(R.string.background_settings_label),
+                getString(R.string.background_settings_summary,
+                        batteryOptimizationText(),
+                        runtime.autoReconnectStatus()));
+        backgroundSection.addView(actionButton(getString(R.string.open_battery_optimization_settings), false,
+                view -> openBatteryOptimizationSettings()), matchParams());
+        backgroundSection.addView(actionButton(getString(R.string.open_app_details_settings), false,
+                view -> openAppDetailsSettings()), matchParams());
+        panel.addView(backgroundSection, dialogSectionParams());
+    }
+
     private String listenerEventTime(SenderListenerSnapshot snapshot) {
         if (snapshot == null || snapshot.lastEventAtEpochMillis <= 0L) {
             return getString(R.string.notification_listener_event_never);
@@ -367,6 +382,24 @@ public final class MainActivity extends AppCompatActivity {
         Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
         intent.setData(Uri.parse("package:" + getPackageName()));
         startActivity(intent);
+    }
+
+    private void openBatteryOptimizationSettings() {
+        try {
+            startActivity(new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS));
+        } catch (ActivityNotFoundException exception) {
+            InkLog.w("event=ui_battery_optimization_settings_unavailable", exception);
+            openAppDetailsSettings();
+        }
+    }
+
+    private String batteryOptimizationText() {
+        PowerManager powerManager = (PowerManager) getSystemService(POWER_SERVICE);
+        boolean unrestricted = powerManager != null
+                && powerManager.isIgnoringBatteryOptimizations(getPackageName());
+        return unrestricted
+                ? getString(R.string.battery_optimization_unrestricted)
+                : getString(R.string.battery_optimization_restricted);
     }
 
     private void addReceiverSettings(LinearLayout panel) {
@@ -441,8 +474,13 @@ public final class MainActivity extends AppCompatActivity {
         new Thread(() -> {
             InkLog.d("event=ui_receiver_connect_thread_start address=" + addressWithPort
                     + " codeLength=" + (code == null ? 0 : code.trim().length()));
-            runtime.connectReceiver(addressWithPort, code);
-            runOnUiThread(() -> render(RuntimeRole.RECEIVER));
+            SessionState state = runtime.connectReceiver(addressWithPort, code);
+            runOnUiThread(() -> {
+                if (state == SessionState.CONNECTED) {
+                    SessionForegroundService.start(this, RuntimeRole.RECEIVER);
+                }
+                render(RuntimeRole.RECEIVER);
+            });
         }, "InkHelperReceiverConnect").start();
     }
 
@@ -451,8 +489,13 @@ public final class MainActivity extends AppCompatActivity {
             InkLog.d("event=ui_receiver_pair_thread_start address=" + candidate.senderAddress
                     + " port=" + candidate.sessionPort
                     + " codeLength=" + candidate.sessionCode.length());
-            runtime.connectReceiver(candidate);
-            runOnUiThread(() -> render(RuntimeRole.RECEIVER));
+            SessionState state = runtime.connectReceiver(candidate);
+            runOnUiThread(() -> {
+                if (state == SessionState.CONNECTED) {
+                    SessionForegroundService.start(this, RuntimeRole.RECEIVER);
+                }
+                render(RuntimeRole.RECEIVER);
+            });
         }, "InkHelperReceiverPair").start();
     }
 

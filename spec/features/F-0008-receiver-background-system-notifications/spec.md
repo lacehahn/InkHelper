@@ -21,6 +21,9 @@ application SHALL keep Receiver runtime support active through a background
 component while Receiver remains the selected role. Receiver SHALL continue to
 accept valid inbound notification information while the application process
 remains alive and the user has not explicitly disconnected or changed role.
+The application SHALL present guidance for Android battery and background
+execution settings so the user can reduce the chance that Android or a vendor
+power manager stops background Receiver operation.
 
 #### Scenario: Receiver keeps an established session while backgrounded <!-- S:F-0008-S01 -->
 
@@ -29,6 +32,14 @@ remains alive and the user has not explicitly disconnected or changed role.
 - **WHEN** the main application UI is no longer visible
 - **THEN** the Receiver session remains available for inbound notification information
 - **AND** the session is not disconnected merely because the UI is backgrounded
+
+#### Scenario: Battery and background execution guidance is available <!-- S:F-0008-S06 -->
+
+- **GIVEN** the application settings are shown
+- **WHEN** the user reviews background operation settings
+- **THEN** the application presents Simplified Chinese guidance about disabling battery restrictions for the app
+- **AND** the application provides a path to Android battery optimization or application detail settings where available
+- **AND** the guidance does not claim that Android will keep the process alive under every vendor policy
 
 ### Requirement: Accepted inbound notifications appear as Android system notifications
 
@@ -84,8 +95,8 @@ Scenario identifiers are defined under their owning requirements above.
 
 - Automated: system-notification content formatting, Simplified Chinese channel
   copy, notification presenter invocation after accepted inbound messages,
-  missing-presenter preservation of inbox acceptance, and stable scenario
-  traceability.
+  missing-presenter preservation of inbox acceptance, battery guidance copy, and
+  stable scenario traceability.
 - Single-device manual: grant notification permission, run Receiver, accept a
   representative inbound notification, background the app, and verify Android
   status bar and notification shade display message content.
@@ -98,9 +109,10 @@ Scenario identifiers are defined under their owning requirements above.
 - `F-0002` Receiver Inbox and Operational Presentation
 - `F-0005` Local Session Lifecycle
 - `F-0006` Notification Transfer and Inbound Validation
+- `F-0009` Background Survival and Reconnect Policy
 
 ## Open Questions
 
-- Persistent foreground service behavior, notification grouping, read state,
-  dismissal synchronization, notification actions, and exact heads-up behavior
-  are not defined by this MVP feature.
+- Notification grouping, read state, dismissal synchronization, notification
+  actions, exact heads-up behavior, and vendor-specific battery-policy
+  enforcement are not defined by this MVP feature.

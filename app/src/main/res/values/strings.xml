@@ -37,6 +37,16 @@
     <string name="rebind_notification_listener">重连通知监听服务</string>
     <string name="notification_listener_restricted_settings_hint">已授权但监听服务未连接时，请在应用详情中允许受限设置，并确认后台/省电策略不限制本应用。</string>
     <string name="open_app_details_settings">打开应用详情设置</string>
+    <string name="background_settings_label">后台运行</string>
+    <string name="background_settings_summary">电池限制：%1$s\n自动重连：\n%2$s\n启动本地连接后，墨屏助手会用前台服务显示常驻通知，以降低后台断开风险。建议在 Android 电池设置中将墨屏助手设为不受限制，并在小米/HyperOS 等系统中允许后台运行、自启动和受限设置。为减少耗电，每次中断最多自动重连 3 次；系统或厂商策略仍可能在极端情况下停止进程，自动重连不保证一定成功。</string>
+    <string name="battery_optimization_unrestricted">当前系统报告为不受电池优化限制</string>
+    <string name="battery_optimization_restricted">可能仍受电池优化或后台策略限制</string>
+    <string name="open_battery_optimization_settings">打开电池优化设置</string>
+    <string name="foreground_service_channel_name">本地中继运行状态</string>
+    <string name="foreground_service_channel_description">墨屏助手本地会话后台运行提示</string>
+    <string name="foreground_service_title">墨屏助手正在后台运行</string>
+    <string name="foreground_service_sender_text">发送端正在保持本地连接，用于转发通知。</string>
+    <string name="foreground_service_receiver_text">接收端正在保持本地连接，用于接收通知。</string>
     <string name="sender_session_state">发送端连接状态：%1$s</string>
     <string name="receiver_session_state">接收端连接状态：%1$s</string>
     <string name="sender_session_details">发送端地址：%1$s\n会话码：%2$s</string>

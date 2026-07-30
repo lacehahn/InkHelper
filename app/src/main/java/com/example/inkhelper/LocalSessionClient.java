@@ -23,6 +23,15 @@ public final class LocalSessionClient {
             int port,
             String code,
             InboundNotificationReceiver receiver) {
+        return connect(host, port, code, receiver, null);
+    }
+
+    public synchronized SessionState connect(
+            String host,
+            int port,
+            String code,
+            InboundNotificationReceiver receiver,
+            Runnable unavailableListener) {
         InkLog.d("event=receiver_connect_start host=" + host
                 + " port=" + port
                 + " codeLength=" + (code == null ? 0 : code.trim().length()));
@@ -67,7 +76,9 @@ public final class LocalSessionClient {
             state = SessionState.CONNECTED;
             socket.setSoTimeout(0);
             InkLog.d("event=receiver_connect_connected sessionId=" + sessionId);
-            readerThread = new Thread(() -> readLoop(receiver, generation), "InkHelperReceiverSession");
+            readerThread = new Thread(
+                    () -> readLoop(receiver, generation, unavailableListener),
+                    "InkHelperReceiverSession");
             readerThread.setDaemon(true);
             readerThread.start();
             return state;
@@ -91,16 +102,17 @@ public final class LocalSessionClient {
         markUnavailableForGeneration(connectionGeneration);
     }
 
-    private synchronized void markUnavailableForGeneration(int generation) {
+    private synchronized boolean markUnavailableForGeneration(int generation) {
         if (generation != connectionGeneration) {
             InkLog.d("event=receiver_session_ignore_stale_unavailable generation=" + generation
                     + " currentGeneration=" + connectionGeneration);
-            return;
+            return false;
         }
         InkLog.d("event=receiver_session_mark_unavailable stopped=" + stopped + " previousState=" + state.name());
         closeSocket();
         state = stopped ? SessionState.DISCONNECTED : SessionState.UNAVAILABLE;
         sessionId = null;
+        return state == SessionState.UNAVAILABLE;
     }
 
     public SessionState state() {
@@ -111,14 +123,14 @@ public final class LocalSessionClient {
         return sessionId;
     }
 
-    private void readLoop(InboundNotificationReceiver receiver, int generation) {
+    private void readLoop(InboundNotificationReceiver receiver, int generation, Runnable unavailableListener) {
         while (!Thread.currentThread().isInterrupted()) {
             try {
                 String line = reader.readLine();
                 if (line == null) {
                     if (shouldMarkUnavailable(generation)) {
                         InkLog.d("event=receiver_read_loop_remote_closed");
-                        markUnavailableForGeneration(generation);
+                        notifyUnavailable(markUnavailableForGeneration(generation), unavailableListener);
                     }
                     return;
                 }
@@ -126,9 +138,19 @@ public final class LocalSessionClient {
             } catch (IOException exception) {
                 if (shouldMarkUnavailable(generation)) {
                     InkLog.w("event=receiver_read_loop_failed", exception);
-                    markUnavailableForGeneration(generation);
+                    notifyUnavailable(markUnavailableForGeneration(generation), unavailableListener);
                 }
                 return;
+            }
+        }
+    }
+
+    private void notifyUnavailable(boolean becameUnavailable, Runnable unavailableListener) {
+        if (becameUnavailable && unavailableListener != null) {
+            try {
+                unavailableListener.run();
+            } catch (RuntimeException exception) {
+                InkLog.w("event=receiver_session_unavailable_listener_failed", exception);
             }
         }
     }

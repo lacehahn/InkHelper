@@ -121,6 +121,50 @@ After a failed or interrupted local session, the application SHALL allow another
 - **THEN** the active role's local session becomes disconnected
 - **AND** the selected role remains active
 
+### Requirement: Local-session recovery can be attempted automatically
+
+After a previously established local session is interrupted, the application
+SHALL make a bounded automatic recovery attempt when the active role still
+matches the interrupted session and the user has not explicitly disconnected or
+changed role. Automatic recovery SHALL try at most three times for one
+interrupted session so recovery attempts do not create excessive battery
+consumption. Sender automatic recovery SHALL restart Sender local-session
+availability so a Receiver can discover and pair again. Receiver automatic
+recovery SHALL scan for available Sender candidates and connect to a valid
+candidate when one is found. Automatic recovery SHALL remain best-effort and
+SHALL NOT claim guaranteed reconnection after Android kills the process,
+disables background execution, changes network topology, or blocks local
+network traffic.
+
+#### Scenario: Sender restarts local-session availability after interruption <!-- S:F-0005-S16 -->
+
+- **GIVEN** Sender is active
+- **AND** Sender previously started local-session availability
+- **AND** the user has not explicitly disconnected
+- **WHEN** Sender detects that the active local session was interrupted
+- **THEN** Sender attempts to restart local-session availability
+- **AND** the selected role remains Sender
+- **AND** the recovery attempt is observable through diagnostics or session state
+- **AND** no more than three automatic recovery attempts are made for the interrupted session
+
+#### Scenario: Receiver scans and reconnects after interruption <!-- S:F-0005-S17 -->
+
+- **GIVEN** Receiver is active
+- **AND** Receiver previously established a local session
+- **AND** the user has not explicitly disconnected
+- **WHEN** Receiver detects that the active local session was interrupted
+- **THEN** Receiver attempts to discover available Sender candidates
+- **AND** Receiver attempts to connect to a valid discovered Sender candidate
+- **AND** the selected role remains Receiver
+- **AND** no more than three automatic recovery attempts are made for the interrupted session
+
+#### Scenario: Explicit user disconnect disables automatic reconnect <!-- S:F-0005-S18 -->
+
+- **GIVEN** an active role has local-session automatic recovery available
+- **WHEN** the user explicitly disconnects the active local session or changes role
+- **THEN** automatic reconnect is disabled for that local session
+- **AND** the active role's session remains disconnected until the user starts or pairs again
+
 ### Requirement: Local-session diagnostics are observable
 
 The application SHALL emit stable diagnostic log events for local-session
@@ -145,8 +189,9 @@ Scenario identifiers are defined under their owning requirements above.
 ## Validation
 
 - Automated: session-state transitions, local address selection, one-counterpart
-  constraints where platform-independent behavior can be isolated, and
-  compile-time validation of stable diagnostic log call sites.
+  constraints where platform-independent behavior can be isolated, automatic
+  recovery policy where deterministic, and compile-time validation of stable
+  diagnostic log call sites.
 - Two-device manual: establish, interrupt, and re-establish a session on the intended local network without internet access.
 
 ## Dependencies
@@ -155,4 +200,7 @@ Scenario identifiers are defined under their owning requirements above.
 
 ## Open Questions
 
-- Automatic reconnect and session timeout behavior are not defined. The MVP uses the displayed local address and current session code as its establishment path and session identity.
+- Session timeout behavior is not defined. Automatic reconnect is best-effort
+  and bounded; process restart survival and vendor-specific background
+  guarantees require future foreground-service or battery-policy
+  specifications.

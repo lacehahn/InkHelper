@@ -4,6 +4,10 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+
 import org.junit.Test;
 
 public class LocalSessionLifecycleTest {
@@ -121,5 +125,78 @@ public class LocalSessionLifecycleTest {
             client.stop();
             server.stop();
         }
+    }
+
+    @Test
+    public void senderAutoReconnectRestartsAvailabilityAfterInterruptedTransfer() throws Exception {
+        // F-0005-S16
+        ScheduledExecutorService reconnectExecutor = Executors.newSingleThreadScheduledExecutor();
+        InkRuntime runtime = new InkRuntime(reconnectExecutor, 5L, 2);
+        LocalSessionClient client = new LocalSessionClient();
+        try {
+            runtime.selectRole(RuntimeRole.SENDER);
+            LocalSessionDetails details = runtime.startSenderSession();
+            assertNotNull(details);
+            assertEquals(SessionState.CONNECTED, client.connect("127.0.0.1", details.port, details.code,
+                    (sessionId, notification) -> true));
+
+            client.stop();
+            assertEquals(TransferStatus.UNCONFIRMED,
+                    runtime.transfer(new TransferNotification("App", 1000L, "Title", "Text")));
+
+            assertTrue(waitFor(() -> runtime.senderSessionState() == SessionState.CONNECTING, 1000L));
+            assertEquals(RuntimeRole.SENDER, runtime.activeRole());
+            assertTrue(runtime.senderAutoReconnectEnabledForTest());
+        } finally {
+            client.stop();
+            runtime.disconnectActiveSession();
+            runtime.shutdownAutoReconnectForTest();
+        }
+    }
+
+    @Test
+    public void explicitDisconnectDisablesAutomaticReconnect() {
+        // F-0005-S18
+        ScheduledExecutorService reconnectExecutor = Executors.newSingleThreadScheduledExecutor();
+        InkRuntime runtime = new InkRuntime(reconnectExecutor, 5L, 2);
+        try {
+            runtime.selectRole(RuntimeRole.SENDER);
+            assertNotNull(runtime.startSenderSession());
+            assertTrue(runtime.senderAutoReconnectEnabledForTest());
+
+            runtime.disconnectActiveSession();
+
+            assertEquals(RuntimeRole.SENDER, runtime.activeRole());
+            assertEquals(SessionState.DISCONNECTED, runtime.senderSessionState());
+            assertTrue(!runtime.senderAutoReconnectEnabledForTest());
+        } finally {
+            runtime.shutdownAutoReconnectForTest();
+        }
+    }
+
+    @Test
+    public void defaultAutomaticReconnectIsLimitedToThreeAttempts() {
+        // F-0005-S16, F-0005-S17
+        InkRuntime runtime = new InkRuntime();
+        try {
+            assertEquals(3, runtime.maxReconnectAttemptsForTest());
+        } finally {
+            runtime.shutdownAutoReconnectForTest();
+        }
+    }
+
+    private boolean waitFor(Condition condition, long timeoutMillis) throws InterruptedException {
+        long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis);
+        while (System.nanoTime() < deadline) {
+            if (condition.met()) {
+                return true;
+            }
+            TimeUnit.MILLISECONDS.sleep(10L);
+        }
+        return condition.met();
+    }
+
+    private interface Condition {
+        boolean met();
     }
 }

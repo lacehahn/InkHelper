@@ -5,9 +5,14 @@ import android.content.Context;
 import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 public final class InkRuntime {
     private static final InkRuntime INSTANCE = new InkRuntime();
+    private static final long DEFAULT_RECONNECT_DELAY_MILLIS = 3000L;
+    private static final int DEFAULT_MAX_RECONNECT_ATTEMPTS = 3;
     private final ReceiverInbox inbox = new ReceiverInbox();
     private final SenderOutbox senderOutbox = new SenderOutbox();
     private final ApplicationAllowlist allowlist = new ApplicationAllowlist();
@@ -28,8 +33,28 @@ public final class InkRuntime {
     private boolean senderListenerConnected;
     private String senderListenerLastEvent = "尚未收到监听器回调";
     private long senderListenerLastEventAtEpochMillis;
+    private final ScheduledExecutorService reconnectExecutor;
+    private final long reconnectDelayMillis;
+    private final int maxReconnectAttempts;
+    private boolean senderAutoReconnectEnabled;
+    private boolean senderReconnectScheduled;
+    private int senderReconnectAttempts;
+    private boolean receiverAutoReconnectEnabled;
+    private boolean receiverReconnectScheduled;
+    private int receiverReconnectAttempts;
 
     InkRuntime() {
+        this(Executors.newSingleThreadScheduledExecutor(runnable -> {
+            Thread thread = new Thread(runnable, "InkHelperAutoReconnect");
+            thread.setDaemon(true);
+            return thread;
+        }), DEFAULT_RECONNECT_DELAY_MILLIS, DEFAULT_MAX_RECONNECT_ATTEMPTS);
+    }
+
+    InkRuntime(ScheduledExecutorService reconnectExecutor, long reconnectDelayMillis, int maxReconnectAttempts) {
+        this.reconnectExecutor = reconnectExecutor;
+        this.reconnectDelayMillis = Math.max(1L, reconnectDelayMillis);
+        this.maxReconnectAttempts = Math.max(1, maxReconnectAttempts);
     }
 
     public static InkRuntime get() {
@@ -59,6 +84,7 @@ public final class InkRuntime {
             return;
         }
         if (changed) {
+            disableAutoReconnect();
             senderSession.stop();
             receiverSession.stop();
             lastPairingCandidates = java.util.Collections.emptyList();
@@ -187,6 +213,9 @@ public final class InkRuntime {
         }
         try {
             LocalSessionDetails details = senderSession.start();
+            senderAutoReconnectEnabled = true;
+            senderReconnectAttempts = 0;
+            senderReconnectScheduled = false;
             lastSessionMessage = "连接信息已生成";
             InkLog.d("event=runtime_start_sender_session_success address=" + details.address
                     + " port=" + details.port
@@ -204,9 +233,13 @@ public final class InkRuntime {
         InkLog.d("event=runtime_disconnect_active_session role="
                 + (role == null ? "null" : role.name()));
         if (role == RuntimeRole.SENDER) {
+            senderAutoReconnectEnabled = false;
+            senderReconnectScheduled = false;
             senderSession.stop();
             lastSessionMessage = "本地连接已断开";
         } else if (role == RuntimeRole.RECEIVER) {
+            receiverAutoReconnectEnabled = false;
+            receiverReconnectScheduled = false;
             receiverSession.stop();
             lastSessionMessage = "本地连接已断开";
         }
@@ -236,11 +269,21 @@ public final class InkRuntime {
                 + " codeLength=" + (code == null ? 0 : code.trim().length()));
         SessionState state;
         try {
-            state = receiverSession.connect(parsedAddress.host, parsedAddress.port, code, this::receiveInbound);
+            state = receiverSession.connect(
+                    parsedAddress.host,
+                    parsedAddress.port,
+                    code,
+                    this::receiveInbound,
+                    () -> onReceiverSessionInterrupted("read_loop_unavailable"));
         } catch (RuntimeException exception) {
             state = SessionState.UNAVAILABLE;
             InkLog.w("event=runtime_receiver_connect_exception host=" + parsedAddress.host
                     + " port=" + parsedAddress.port, exception);
+        }
+        if (state == SessionState.CONNECTED) {
+            receiverAutoReconnectEnabled = true;
+            receiverReconnectAttempts = 0;
+            receiverReconnectScheduled = false;
         }
         lastSessionMessage = state == SessionState.CONNECTED ? "本地连接已建立" : "本地连接不可用";
         InkLog.d("event=runtime_receiver_connect_result state=" + state.name()
@@ -326,6 +369,10 @@ public final class InkRuntime {
             return lastTransferStatus;
         }
         lastTransferStatus = senderSession.transfer(notification);
+        if (lastTransferStatus == TransferStatus.UNCONFIRMED
+                && senderSession.state() == SessionState.UNAVAILABLE) {
+            scheduleSenderReconnectLocked("transfer_unconfirmed");
+        }
         InkLog.d("event=runtime_transfer_result status=" + lastTransferStatus.name());
         return lastTransferStatus;
     }
@@ -400,6 +447,170 @@ public final class InkRuntime {
             return "未发送";
         }
         return "尚未开始";
+    }
+
+    public synchronized String autoReconnectStatus() {
+        String sender = senderAutoReconnectEnabled
+                ? (senderReconnectScheduled ? "发送端等待自动重连" : "发送端自动重连已启用")
+                : "发送端自动重连未启用";
+        String receiver = receiverAutoReconnectEnabled
+                ? (receiverReconnectScheduled ? "接收端等待自动重连" : "接收端自动重连已启用")
+                : "接收端自动重连未启用";
+        return sender + "\n" + receiver;
+    }
+
+    synchronized boolean senderAutoReconnectEnabledForTest() {
+        return senderAutoReconnectEnabled;
+    }
+
+    synchronized boolean receiverAutoReconnectEnabledForTest() {
+        return receiverAutoReconnectEnabled;
+    }
+
+    synchronized int maxReconnectAttemptsForTest() {
+        return maxReconnectAttempts;
+    }
+
+    void shutdownAutoReconnectForTest() {
+        reconnectExecutor.shutdownNow();
+    }
+
+    private synchronized void onReceiverSessionInterrupted(String reason) {
+        InkLog.d("event=runtime_receiver_session_interrupted reason=" + reason
+                + " activeRole=" + (roleState.activeRole() == null ? "null" : roleState.activeRole().name())
+                + " receiverAutoReconnectEnabled=" + receiverAutoReconnectEnabled);
+        scheduleReceiverReconnectLocked(reason);
+    }
+
+    private void scheduleSenderReconnectLocked(String reason) {
+        if (roleState.activeRole() != RuntimeRole.SENDER
+                || !senderAutoReconnectEnabled
+                || senderReconnectScheduled
+                || senderReconnectAttempts >= maxReconnectAttempts) {
+            InkLog.d("event=runtime_sender_auto_reconnect_skip reason=" + reason
+                    + " activeRole=" + (roleState.activeRole() == null ? "null" : roleState.activeRole().name())
+                    + " enabled=" + senderAutoReconnectEnabled
+                    + " scheduled=" + senderReconnectScheduled
+                    + " attempts=" + senderReconnectAttempts);
+            return;
+        }
+        senderReconnectScheduled = true;
+        lastSessionMessage = "发送端将在后台尝试自动重连";
+        InkLog.d("event=runtime_sender_auto_reconnect_scheduled reason=" + reason
+                + " delayMillis=" + reconnectDelayMillis
+                + " nextAttempt=" + (senderReconnectAttempts + 1));
+        reconnectExecutor.schedule(this::attemptSenderReconnect, reconnectDelayMillis, TimeUnit.MILLISECONDS);
+    }
+
+    private void scheduleReceiverReconnectLocked(String reason) {
+        if (roleState.activeRole() != RuntimeRole.RECEIVER
+                || !receiverAutoReconnectEnabled
+                || receiverReconnectScheduled
+                || receiverReconnectAttempts >= maxReconnectAttempts) {
+            InkLog.d("event=runtime_receiver_auto_reconnect_skip reason=" + reason
+                    + " activeRole=" + (roleState.activeRole() == null ? "null" : roleState.activeRole().name())
+                    + " enabled=" + receiverAutoReconnectEnabled
+                    + " scheduled=" + receiverReconnectScheduled
+                    + " attempts=" + receiverReconnectAttempts);
+            return;
+        }
+        receiverReconnectScheduled = true;
+        lastSessionMessage = "接收端将在后台扫描并尝试自动重连";
+        InkLog.d("event=runtime_receiver_auto_reconnect_scheduled reason=" + reason
+                + " delayMillis=" + reconnectDelayMillis
+                + " nextAttempt=" + (receiverReconnectAttempts + 1));
+        reconnectExecutor.schedule(this::attemptReceiverReconnect, reconnectDelayMillis, TimeUnit.MILLISECONDS);
+    }
+
+    private void attemptSenderReconnect() {
+        synchronized (this) {
+            senderReconnectScheduled = false;
+            if (roleState.activeRole() != RuntimeRole.SENDER || !senderAutoReconnectEnabled) {
+                InkLog.d("event=runtime_sender_auto_reconnect_aborted");
+                return;
+            }
+            if (senderSession.state() == SessionState.CONNECTED || senderSession.state() == SessionState.CONNECTING) {
+                InkLog.d("event=runtime_sender_auto_reconnect_already_available state="
+                        + senderSession.state().name());
+                return;
+            }
+            senderReconnectAttempts++;
+            InkLog.d("event=runtime_sender_auto_reconnect_attempt attempt=" + senderReconnectAttempts);
+            try {
+                LocalSessionDetails details = senderSession.start();
+                lastSessionMessage = "发送端已自动恢复连接信息";
+                senderReconnectAttempts = 0;
+                InkLog.d("event=runtime_sender_auto_reconnect_success address=" + details.address
+                        + " port=" + details.port
+                        + " codeLength=" + details.code.length());
+            } catch (IOException exception) {
+                lastSessionMessage = "发送端自动重连失败";
+                InkLog.w("event=runtime_sender_auto_reconnect_failed", exception);
+                scheduleSenderReconnectLocked("sender_restart_failed");
+            }
+        }
+    }
+
+    private void attemptReceiverReconnect() {
+        synchronized (this) {
+            receiverReconnectScheduled = false;
+            if (roleState.activeRole() != RuntimeRole.RECEIVER || !receiverAutoReconnectEnabled) {
+                InkLog.d("event=runtime_receiver_auto_reconnect_aborted");
+                return;
+            }
+            if (receiverSession.state() == SessionState.CONNECTED) {
+                InkLog.d("event=runtime_receiver_auto_reconnect_already_connected");
+                return;
+            }
+            receiverReconnectAttempts++;
+            lastSessionMessage = "接收端正在自动扫描发送端";
+            InkLog.d("event=runtime_receiver_auto_reconnect_attempt attempt=" + receiverReconnectAttempts);
+        }
+
+        List<PairingCandidate> candidates = pairingScanner.scan();
+        PairingCandidate candidate = firstValidCandidate(candidates);
+
+        synchronized (this) {
+            if (roleState.activeRole() != RuntimeRole.RECEIVER || !receiverAutoReconnectEnabled) {
+                InkLog.d("event=runtime_receiver_auto_reconnect_result_ignored");
+                return;
+            }
+            lastPairingCandidates = candidates;
+            if (candidate != null && receiverSession.state() != SessionState.CONNECTED) {
+                InkLog.d("event=runtime_receiver_auto_reconnect_candidate address=" + candidate.senderAddress
+                        + " port=" + candidate.sessionPort);
+                connectReceiver(candidate);
+            }
+            if (receiverSession.state() == SessionState.CONNECTED) {
+                lastSessionMessage = "接收端已自动重连";
+                receiverReconnectAttempts = 0;
+                InkLog.d("event=runtime_receiver_auto_reconnect_success");
+            } else {
+                lastSessionMessage = candidates.isEmpty() ? "自动重连未发现发送端" : "接收端自动重连失败";
+                scheduleReceiverReconnectLocked("receiver_auto_connect_failed");
+            }
+        }
+    }
+
+    private void disableAutoReconnect() {
+        senderAutoReconnectEnabled = false;
+        senderReconnectScheduled = false;
+        senderReconnectAttempts = 0;
+        receiverAutoReconnectEnabled = false;
+        receiverReconnectScheduled = false;
+        receiverReconnectAttempts = 0;
+    }
+
+    private static PairingCandidate firstValidCandidate(List<PairingCandidate> candidates) {
+        if (candidates == null) {
+            return null;
+        }
+        for (PairingCandidate candidate : candidates) {
+            if (candidate != null && candidate.isValid()) {
+                return candidate;
+            }
+        }
+        return null;
     }
 
     public synchronized SessionState senderSessionState() {
