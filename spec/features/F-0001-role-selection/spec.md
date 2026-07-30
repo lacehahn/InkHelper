@@ -83,6 +83,10 @@ The application SHALL allow the user to replace the active role with the other r
 - **THEN** Receiver remains the active role
 - **AND** Sender remains inactive
 
+## Scenarios
+
+Scenario identifiers are defined under their owning requirements above.
+
 ## Validation
 
 - Automated: role selection, restoration, switching, and repeated selection.

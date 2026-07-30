@@ -1,0 +1,9 @@
+<resources>
+    <dimen name="role_selection_padding">20dp</dimen>
+    <dimen name="ink_screen_padding">20dp</dimen>
+    <dimen name="ink_section_gap">14dp</dimen>
+    <dimen name="ink_item_gap">8dp</dimen>
+    <dimen name="ink_corner_radius">8dp</dimen>
+    <dimen name="ink_stroke_width">1dp</dimen>
+    <dimen name="ink_touch_target">48dp</dimen>
+</resources>

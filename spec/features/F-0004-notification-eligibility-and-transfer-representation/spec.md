@@ -8,20 +8,19 @@ This feature evaluates observed Sender notification events for relay eligibility
 
 ### Requirement: The MVP uses a defined eligibility baseline
 
-The Sender SHALL evaluate each observed notification event against the MVP eligibility baseline. The baseline SHALL accept an event only when its source application is available, its captured timestamp is available, and at least one of its title or text is non-empty. An empty application allowlist SHALL accept events from every source application that satisfies those conditions. A non-empty application allowlist SHALL accept an event only when its source application appears in that allowlist. An event rejected by the baseline SHALL NOT be offered for transfer.
+The Sender SHALL evaluate each observed notification event against the MVP eligibility baseline. The baseline SHALL accept an event only when its source application is available, its captured timestamp is available, and at least one of its title or text is non-empty. The MVP SHALL NOT apply application source filtering, package allowlisting, notification category filtering, or any other user-configured filter to eligibility. The MVP SHALL NOT require additional filtering-related Android permissions. An event rejected by the baseline SHALL NOT be offered for transfer.
 
 #### Scenario: Eligible notification is accepted <!-- S:F-0004-S01 -->
 
 - **GIVEN** Sender provides an observed notification event
 - **AND** the event has a source application, captured timestamp, and non-empty title or text
-- **AND** the application allowlist is empty or contains the source application
 - **WHEN** eligibility is evaluated
 - **THEN** the event is accepted for transfer preparation
 
 #### Scenario: Ineligible notification is rejected <!-- S:F-0004-S02 -->
 
 - **GIVEN** Sender provides an observed notification event
-- **AND** the event has no source application, no captured timestamp, no readable title or text, or a source application excluded by a non-empty allowlist
+- **AND** the event has no source application, no captured timestamp, or no readable title or text
 - **WHEN** eligibility is evaluated
 - **THEN** the event is rejected
 - **AND** no transferable notification is produced
@@ -34,30 +33,30 @@ The Sender SHALL evaluate each observed notification event against the MVP eligi
 - **THEN** the new event is rejected
 - **AND** the previously accepted notification remains unchanged
 
-#### Scenario: Non-empty allowlist excludes a source application <!-- S:F-0004-S06 -->
+#### Scenario: Configured source list does not exclude a source application <!-- S:F-0004-S06 -->
 
 - **GIVEN** Sender provides an observed notification event with required readable information
-- **AND** the application allowlist does not contain the event's source application
+- **AND** a user-configured source list does not contain the event's source application
 - **WHEN** eligibility is evaluated
-- **THEN** the event is rejected
-- **AND** no transferable notification is produced
+- **THEN** the event is accepted
+- **AND** a transferable notification is produced
 
-### Requirement: The user manages the application allowlist
+### Requirement: The MVP defers application allowlist filtering
 
-The application SHALL start with an empty application allowlist. The user SHALL be able to add a source application to, or remove a source application from, the allowlist. Changing the allowlist SHALL affect eligibility evaluation of later observed events and SHALL NOT alter a notification already accepted for transfer.
+The application MAY retain internal application allowlist data for future work, but the MVP UI SHALL NOT ask the user to configure notification source filters. Changing any retained allowlist data SHALL NOT affect eligibility evaluation of later observed events and SHALL NOT alter a notification already accepted for transfer.
 
-#### Scenario: User adds a source application to the allowlist <!-- S:F-0004-S08 -->
+#### Scenario: Existing source-list data is ignored for later eligibility <!-- S:F-0004-S08 -->
 
-- **GIVEN** the application allowlist does not contain a source application
-- **WHEN** the user adds that source application to the allowlist
-- **THEN** later observed events from that source application satisfy the allowlist condition
+- **GIVEN** retained source-list data contains one source application
+- **WHEN** a later observed event from a different source application is evaluated
+- **THEN** the later event is not rejected by source-list data
 
-#### Scenario: User removes a source application from the allowlist <!-- S:F-0004-S09 -->
+#### Scenario: Source-list changes preserve previously accepted notifications <!-- S:F-0004-S09 -->
 
-- **GIVEN** the application allowlist contains a source application
-- **WHEN** the user removes that source application from the allowlist
-- **THEN** later observed events from that source application fail the allowlist condition
-- **AND** previously accepted notifications remain unchanged
+- **GIVEN** a notification has already been accepted for transfer
+- **WHEN** retained source-list data changes
+- **THEN** the previously accepted notification remains unchanged
+- **AND** later observed events are still evaluated only by the MVP eligibility baseline
 
 ### Requirement: Accepted notifications use the MVP transfer representation
 
@@ -86,10 +85,14 @@ The Sender SHALL prepare accepted notifications as a transferable representation
 - **THEN** no transferable notification is produced
 - **AND** the event is not offered for transfer
 
+## Scenarios
+
+Scenario identifiers are defined under their owning requirements above.
+
 ## Validation
 
 - Automated: accepted and rejected eligibility evaluation, representation preparation, and preservation of unrelated accepted work.
-- Single-device manual: observe representative accessible notifications and verify only configured eligible notifications are prepared.
+- Single-device manual: observe representative accessible notifications and verify notifications with required transferable fields are prepared without source filtering.
 
 ## Dependencies
 

@@ -19,6 +19,14 @@ The Sender SHALL attempt to transfer an eligible notification representation onl
 - **THEN** the notification is delivered to Receiver for inbound validation
 - **AND** Sender presents the transfer as confirmed received only after Receiver accepts it and returns confirmation
 
+#### Scenario: User-initiated representative transfer follows connected-session behavior <!-- S:F-0006-S12 -->
+
+- **GIVEN** Sender is active
+- **AND** the local session is connected
+- **WHEN** the user initiates a representative eligible notification transfer from the Sender UI
+- **THEN** the transfer follows the same connected-session transfer and confirmation behavior as an observed eligible notification
+- **AND** the connected session is not made unavailable merely because the transfer was initiated from the UI
+
 #### Scenario: Transfer is not sent without a connected session <!-- S:F-0006-S02 -->
 
 - **GIVEN** Sender is active
@@ -113,9 +121,79 @@ The MVP SHALL treat each accepted notification event as a distinct transfer even
 - **WHEN** the Receiver inbox is shown
 - **THEN** each accepted event is available as a distinct inbox item
 
+### Requirement: Transfer diagnostics are observable
+
+The application SHALL emit stable diagnostic log events for notification
+transfer attempts so failed transfers can be debugged from captured Sender and
+Receiver device logs. Diagnostic logs SHALL identify observed-event gating,
+eligibility rejection, transfer start, socket write, Receiver inbound
+validation, ACK, REJECT, unexpected responses, and transfer failure. Logs SHALL
+NOT expose full notification text.
+
+The Sender SHALL also present a local outbox containing recent notification
+transfer attempts. Each outbox item SHALL present the source application and
+captured timestamp on one visible header line, transferable title and text when
+available, transfer status, and the latest diagnostic stage. When a source
+application matches a simple locally known package name, presentation MAY use
+the known human-readable application name while preserving transfer behavior.
+The outbox SHALL update when an observed notification is accepted for transfer
+preparation, rejected by eligibility, not sent, unconfirmed, rejected by
+Receiver, or confirmed received. The outbox is diagnostic presentation only and
+SHALL NOT create pending retry behavior. The Sender SHALL allow the user to
+remove one visible outbox item using a compact right-aligned `X` icon control,
+or clear all visible outbox items from the current local outbox list. Outbox
+deletion SHALL NOT affect delivered Receiver inbox items, local-session state,
+notification listener state, or transfer protocol behavior.
+
+#### Scenario: Transfer diagnostics identify the failed transfer step <!-- S:F-0006-S13 -->
+
+- **GIVEN** Sender initiates a notification transfer
+- **WHEN** the transfer is confirmed, rejected, unconfirmed, or not sent
+- **THEN** diagnostic logs identify the last completed transfer step
+- **AND** diagnostic logs include transfer status and session state context needed for debugging
+- **AND** diagnostic logs do not include full notification text
+
+#### Scenario: Sender outbox presents recent transfer attempts <!-- S:F-0006-S14 -->
+
+- **GIVEN** Sender is active
+- **WHEN** an observed notification is accepted, rejected, not sent, unconfirmed, rejected by Receiver, or confirmed received
+- **THEN** the Sender outbox presents a recent item for that notification attempt
+- **AND** the item presents source application and captured timestamp on one header line
+- **AND** the item presents available title and text, transfer status, and latest diagnostic stage
+- **AND** the item does not imply automatic retry or guaranteed delivery
+
+#### Scenario: Known package source is presented as a readable Sender outbox application name <!-- S:F-0006-S17 -->
+
+- **GIVEN** Sender is active
+- **AND** an outbox item source application is `com.tencent.mm`
+- **WHEN** the Sender outbox item is shown
+- **THEN** the outbox item presents the source application as `微信`
+- **AND** the underlying transfer representation is unchanged
+
+#### Scenario: User deletes one Sender outbox item <!-- S:F-0006-S15 -->
+
+- **GIVEN** Sender has multiple visible outbox items
+- **WHEN** the user deletes one outbox item
+- **THEN** that item is removed from the current Sender outbox list
+- **AND** the remaining outbox items stay visible
+- **AND** local-session state and Receiver inbox contents are unchanged
+- **AND** the per-item delete control is presented as a right-aligned `X` icon
+
+#### Scenario: User clears the Sender outbox <!-- S:F-0006-S16 -->
+
+- **GIVEN** Sender has one or more visible outbox items
+- **WHEN** the user clears the Sender outbox
+- **THEN** all current Sender outbox items are removed
+- **AND** the empty outbox state is presented
+- **AND** local-session state and transfer protocol behavior are unchanged
+
+## Scenarios
+
+Scenario identifiers are defined under their owning requirements above.
+
 ## Validation
 
-- Automated: transfer confirmation, no-session disposition, inbound rejection, repeated-event handling, and state preservation.
+- Automated: transfer confirmation, no-session disposition, inbound rejection, repeated-event handling, invalid-transfer state preservation, Sender outbox state updates and deletion, and compile-time validation of stable diagnostic log call sites.
 - Two-device manual: transfer a representative eligible notification, interrupt a transfer, restore the session, and transfer a later notification.
 
 ## Dependencies
@@ -125,4 +203,4 @@ The MVP SHALL treat each accepted notification event as a distinct transfer even
 
 ## Open Questions
 
-- Automatic retry, user-initiated resend, and future duplicate-event suppression are not defined. The MVP has no pending transfer queue and no duplicate suppression.
+- Automatic retry, user-initiated resend, persistence, and future duplicate-event suppression are not defined. The MVP has no pending transfer queue and no duplicate suppression.

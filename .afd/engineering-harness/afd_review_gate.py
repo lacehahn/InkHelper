@@ -9,6 +9,7 @@ def main() -> int:
   if a.task:
    task,task_errors=schema_record(a.task,"task")
    if task_errors or task["task_id"]!=review["task_id"]: emit({"status":"failed","exit_code":SPEC_CONFLICT,"gate":"stop","diagnostics":[{"message":"task and review identity conflict"}]},a.output); return SPEC_CONFLICT
+   if task["result_commit"] != review["reviewed_revision"]["result_commit"]: emit({"status":"failed","exit_code":SPEC_CONFLICT,"gate":"stop","diagnostics":[{"message":"review is stale for the task result revision"}]},a.output); return SPEC_CONFLICT
   code={"approved":SUCCESS,"changes_required":VALIDATION_FAILURE,"blocked":SPEC_CONFLICT}[review["verdict"]]
   emit({"status":"passed" if code==0 else "failed","exit_code":code,"gate":"continue" if code==0 else "stop","verdict":review["verdict"],"diagnostics":[]},a.output); return code
  except Exception as e:return fail(e,a.output)

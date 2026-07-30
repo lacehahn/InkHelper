@@ -49,14 +49,39 @@ When Sender is the active role, the application SHALL expose whether the Android
 - **THEN** notification access is presented as unavailable
 - **AND** notification observation becomes inactive
 
+#### Scenario: Listener binding diagnostics are presented <!-- S:F-0003-S09 -->
+
+- **GIVEN** Sender is active
+- **WHEN** Sender notification-access state is presented
+- **THEN** the application presents whether Android notification access is enabled
+- **AND** it presents whether the notification listener service has connected to Android
+- **AND** it presents the most recent listener callback observed by the application
+
+#### Scenario: User requests listener rebind <!-- S:F-0003-S10 -->
+
+- **GIVEN** Sender is active
+- **AND** Android notification access is available
+- **WHEN** the user requests notification listener reconnection
+- **THEN** the application asks Android to rebind the Sender notification listener when the platform supports rebind requests
+- **AND** the request does not change the active Sender role or local session state
+
+#### Scenario: Authorized listener remains disconnected <!-- S:F-0003-S11 -->
+
+- **GIVEN** Sender is active
+- **AND** Android notification access is enabled
+- **AND** the notification listener service has not connected to Android
+- **WHEN** Sender notification-access state is presented
+- **THEN** the application presents that the listener is not connected
+- **AND** it presents a path to the application details settings so the user can resolve platform restricted-settings or vendor background-service restrictions
+
 ### Requirement: The Sender observes accessible notification events
 
-The Sender SHALL observe new notification events only while Sender is active and required Android notification access is available. The Sender SHALL pass an observed event to notification eligibility evaluation without exposing Android notification objects beyond the platform boundary.
+The Sender SHALL observe new notification events only while Sender is active and required Android notification access is available. A notification event delivered through Android's bound notification listener callback SHALL be treated as access-available for that event. The Sender SHALL pass an observed event to notification eligibility evaluation without exposing Android notification objects beyond the platform boundary.
 
 #### Scenario: Accessible notification is observed <!-- S:F-0003-S04 -->
 
 - **GIVEN** Sender is active
-- **AND** notification access is available
+- **AND** Android delivers a notification listener callback
 - **WHEN** Android makes a new notification event accessible
 - **THEN** the event is available for eligibility evaluation
 
@@ -75,9 +100,13 @@ The Sender SHALL observe new notification events only while Sender is active and
 - **THEN** Sender notification observation becomes inactive
 - **AND** Receiver does not require notification access
 
+## Scenarios
+
+Scenario identifiers are defined under their owning requirements above.
+
 ## Validation
 
-- Automated: role and access-state gating of observation where platform-independent behavior can be isolated.
+- Automated: role and access-state gating of observation where platform-independent behavior can be isolated, and listener diagnostic state updates.
 - Single-device manual: enable, deny or leave unavailable, revoke, and restore Android notification access on a Sender device.
 
 ## Dependencies
