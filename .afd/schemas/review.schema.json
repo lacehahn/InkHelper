@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://inkhelper.local/afd/schemas/review.schema.json",
+  "title": "AFD Independent Review",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "review_id", "task_id", "reviewer_role", "reviewed_revision", "verdict", "findings", "reviewed_scenario_ids", "validation_evidence", "unresolved_questions", "timestamp"],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "review_id": { "type": "string", "pattern": "^review-[a-z0-9][a-z0-9-]{0,62}$" },
+    "task_id": { "type": "string", "pattern": "^task-[a-z0-9][a-z0-9-]{0,62}$" },
+    "reviewer_role": { "enum": ["independent", "self_second_pass"] },
+    "reviewed_revision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["base_commit", "result_commit"],
+      "properties": {
+        "base_commit": { "$ref": "#/$defs/commitOrNull" },
+        "result_commit": { "$ref": "#/$defs/commitOrNull" }
+      }
+    },
+    "verdict": { "enum": ["approved", "changes_required", "blocked"] },
+    "findings": { "type": "array", "items": { "$ref": "#/$defs/finding" } },
+    "reviewed_scenario_ids": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/scenarioId" } },
+    "validation_evidence": { "type": "array", "items": { "$ref": "#/$defs/evidenceReference" } },
+    "unresolved_questions": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "extensions": { "type": "object" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "verdict": { "const": "approved" } }, "required": ["verdict"] },
+      "then": { "properties": { "findings": { "items": { "properties": { "severity": { "enum": ["minor", "observation"] } }, "required": ["severity"] } } } }
+    },
+    {
+      "if": { "properties": { "verdict": { "const": "blocked" } }, "required": ["verdict"] },
+      "then": { "properties": { "findings": { "contains": { "properties": { "severity": { "const": "blocker" } }, "required": ["severity"] } } } }
+    }
+  ],
+  "$defs": {
+    "featureIdOrNull": { "anyOf": [{ "type": "string", "pattern": "^F-[0-9]{4}$" }, { "type": "null" }] },
+    "scenarioId": { "type": "string", "pattern": "^F-[0-9]{4}-S[0-9]{2}$" },
+    "commitOrNull": { "anyOf": [{ "type": "string", "pattern": "^[0-9a-fA-F]{7,64}$" }, { "type": "null" }] },
+    "repositoryPathOrNull": { "anyOf": [{ "type": "string", "pattern": "^(?!/)(?![A-Za-z]:)(?!.*\\\\).+" }, { "type": "null" }] },
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["finding_id", "severity", "category", "feature_id", "scenario_id", "location", "problem", "evidence", "required_correction"],
+      "properties": {
+        "finding_id": { "type": "string", "pattern": "^finding-[a-z0-9][a-z0-9-]{0,62}$" },
+        "severity": { "enum": ["blocker", "major", "minor", "observation"] },
+        "category": { "enum": ["specification", "scenario", "implementation", "validation", "architecture", "scope", "security", "traceability", "repository"] },
+        "feature_id": { "$ref": "#/$defs/featureIdOrNull" },
+        "scenario_id": { "anyOf": [{ "$ref": "#/$defs/scenarioId" }, { "type": "null" }] },
+        "location": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["path", "line_start", "line_end"],
+          "properties": {
+            "path": { "$ref": "#/$defs/repositoryPathOrNull" },
+            "line_start": { "anyOf": [{ "type": "integer", "minimum": 1 }, { "type": "null" }] },
+            "line_end": { "anyOf": [{ "type": "integer", "minimum": 1 }, { "type": "null" }] }
+          }
+        },
+        "problem": { "type": "string", "minLength": 1 },
+        "evidence": { "type": "string", "minLength": 1 },
+        "required_correction": { "type": "string", "minLength": 1 }
+      }
+    },
+    "evidenceReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "status"],
+      "properties": {
+        "path": { "type": "string", "pattern": "^(?!/)(?![A-Za-z]:)(?!.*\\\\).+" },
+        "status": { "enum": ["passed", "failed", "not_run", "blocked", "partially_verified"] }
+      }
+    }
+  }
+}

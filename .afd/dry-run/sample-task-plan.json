@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "task_id": "task-dry-run-plan",
+  "task_type": "validation",
+  "feature_id": null,
+  "scenario_ids": [],
+  "dependencies": [],
+  "allowed_scope": [".afd/dry-run"],
+  "forbidden_scope": ["app", "spec", "build"],
+  "required_reading": ["AGENTS.md", ".afd/HARNESS.md", ".afd/engineering-harness/README.md"],
+  "required_validation": [{"kind": "diff_check", "reference": "git diff --check", "required": true}],
+  "task_state": "completed",
+  "retry_counters": {"same_failure_attempts": 0, "reproduction_attempts": 0, "validation_attempts": 0},
+  "stop_reason": "none",
+  "base_commit": null,
+  "result_commit": null,
+  "timestamps": {"created_at": "2026-07-29T14:00:00Z", "updated_at": "2026-07-29T14:50:00Z", "completed_at": "2026-07-29T14:50:00Z"},
+  "output_artifacts": [{"kind": "completion_report", "path": ".afd/dry-run/simulation-results.md"}],
+  "extensions": {
+    "synthetic_only": true,
+    "scenario_plan": [
+      {"id": "S01", "task": "task-dry-run-success", "expected": "complete after validation, approved review, checkpoint"},
+      {"id": "S02", "task": "task-dry-run-validation-repair", "expected": "repair after failed validation"},
+      {"id": "S03", "task": "task-dry-run-review-repair", "expected": "repair after changes_required review"},
+      {"id": "S04", "task": "task-dry-run-review-budget", "expected": "blocked after configured review budget"},
+      {"id": "S05", "task": "task-dry-run-validation-budget", "expected": "blocked after configured validation budget"},
+      {"id": "S06", "task": "task-dry-run-no-progress", "expected": "safe termination"},
+      {"id": "S07", "task": "task-dry-run-root-cause", "expected": "blocked after identical root cause"},
+      {"id": "S08", "task": "task-dry-run-resume", "expected": "persist then resume"},
+      {"id": "S09", "task": "task-dry-run-dirty-repository", "expected": "safe stop with evidence"},
+      {"id": "S10", "task": "task-dry-run-missing-checkpoint", "expected": "recovery procedure"},
+      {"id": "S11", "task": "task-dry-run-package-gate", "expected": "packaging rejected"},
+      {"id": "S12", "task": "task-dry-run-final", "expected": "final report"}
+    ]
+  }
+}

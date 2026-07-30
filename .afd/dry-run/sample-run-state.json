@@ -1,0 +1,30 @@
+{
+  "schema_version": "1.0",
+  "run_id": "run-dry-run-simulation",
+  "repository": {"root_path": ".", "identity": "synthetic-afd-dry-run"},
+  "starting_commit": null,
+  "current_checkpoint_commit": null,
+  "current_task": null,
+  "task_queue": [],
+  "completed_tasks": ["task-dry-run-success", "task-dry-run-validation-repair", "task-dry-run-review-repair", "task-dry-run-resume", "task-dry-run-final"],
+  "blocked_tasks": ["task-dry-run-review-budget", "task-dry-run-validation-budget", "task-dry-run-root-cause"],
+  "failed_tasks": ["task-dry-run-no-progress", "task-dry-run-dirty-repository", "task-dry-run-missing-checkpoint", "task-dry-run-package-gate"],
+  "retry_counts": {"task-dry-run-review-budget": 2, "task-dry-run-validation-budget": 2, "task-dry-run-root-cause": 2},
+  "validation_history": [
+    {"task_id": "task-dry-run-success", "artifact_path": ".afd/dry-run/sample-validation/s01.json", "status": "passed", "recorded_at": "2026-07-29T14:05:00Z"},
+    {"task_id": "task-dry-run-validation-repair", "artifact_path": ".afd/dry-run/sample-validation/s02-failed.json", "status": "failed", "recorded_at": "2026-07-29T14:10:00Z"},
+    {"task_id": "task-dry-run-validation-repair", "artifact_path": ".afd/dry-run/sample-validation/s02-passed.json", "status": "passed", "recorded_at": "2026-07-29T14:15:00Z"}
+  ],
+  "review_history": [
+    {"task_id": "task-dry-run-success", "artifact_path": ".afd/dry-run/sample-reviews/s01-approved.json", "status": "approved", "recorded_at": "2026-07-29T14:06:00Z"},
+    {"task_id": "task-dry-run-review-repair", "artifact_path": ".afd/dry-run/sample-reviews/s03-changes-required.json", "status": "changes_required", "recorded_at": "2026-07-29T14:20:00Z"},
+    {"task_id": "task-dry-run-review-repair", "artifact_path": ".afd/dry-run/sample-reviews/s03-approved.json", "status": "approved", "recorded_at": "2026-07-29T14:25:00Z"}
+  ],
+  "generated_artifacts": [{"kind": "completion_report", "path": ".afd/dry-run/simulation-results.md"}],
+  "run_status": "completed",
+  "stop_reason": "successful_completion",
+  "start_time": "2026-07-29T14:00:00Z",
+  "last_update_time": "2026-07-29T14:50:00Z",
+  "completion_time": "2026-07-29T14:50:00Z",
+  "extensions": {"synthetic_only": true, "coverage_limit": "Only schema and read-only harness behavior was executed; unavailable autonomous records and budgets are defects documented in simulation-results.md."}
+}

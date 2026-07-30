@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://inkhelper.local/afd/schemas/task.schema.json",
+  "title": "AFD Engineering Task",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "task_id",
+    "task_type",
+    "allowed_scope",
+    "forbidden_scope",
+    "required_reading",
+    "required_validation",
+    "task_state",
+    "retry_counters",
+    "stop_reason",
+    "base_commit",
+    "result_commit",
+    "timestamps",
+    "output_artifacts"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "task_id": { "$ref": "#/$defs/taskId" },
+    "task_type": {
+      "enum": ["specification", "implementation", "review", "debugging", "validation", "documentation"]
+    },
+    "feature_id": { "anyOf": [{ "$ref": "#/$defs/featureId" }, { "type": "null" }] },
+    "scenario_ids": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/scenarioId" }
+    },
+    "dependencies": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/taskId" }
+    },
+    "allowed_scope": { "$ref": "#/$defs/pathList" },
+    "forbidden_scope": { "$ref": "#/$defs/pathList" },
+    "required_reading": { "$ref": "#/$defs/pathList" },
+    "required_validation": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/validationRequirement" }
+    },
+    "task_state": {
+      "enum": ["planned", "ready", "in_progress", "validating", "awaiting_review", "blocked", "failed", "completed", "cancelled"]
+    },
+    "retry_counters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["same_failure_attempts", "reproduction_attempts", "validation_attempts"],
+      "properties": {
+        "same_failure_attempts": { "type": "integer", "minimum": 0, "maximum": 2 },
+        "reproduction_attempts": { "type": "integer", "minimum": 0 },
+        "validation_attempts": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "stop_reason": {
+      "enum": ["none", "policy_stop", "specification_conflict", "environment_failure", "validation_failure", "user_cancelled"]
+    },
+    "base_commit": { "$ref": "#/$defs/commitOrNull" },
+    "result_commit": { "$ref": "#/$defs/commitOrNull" },
+    "timestamps": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["created_at", "updated_at", "completed_at"],
+      "properties": {
+        "created_at": { "type": "string", "format": "date-time" },
+        "updated_at": { "type": "string", "format": "date-time" },
+        "completed_at": { "anyOf": [{ "type": "string", "format": "date-time" }, { "type": "null" }] }
+      }
+    },
+    "output_artifacts": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/artifactReference" }
+    },
+    "extensions": { "type": "object" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "task_state": { "enum": ["blocked", "failed", "cancelled"] } }, "required": ["task_state"] },
+      "then": { "properties": { "stop_reason": { "not": { "const": "none" } } } }
+    },
+    {
+      "if": { "properties": { "task_state": { "const": "completed" } }, "required": ["task_state"] },
+      "then": { "properties": { "stop_reason": { "const": "none" } } }
+    }
+  ],
+  "$defs": {
+    "taskId": { "type": "string", "pattern": "^task-[a-z0-9][a-z0-9-]{0,62}$" },
+    "featureId": { "type": "string", "pattern": "^F-[0-9]{4}$" },
+    "scenarioId": { "type": "string", "pattern": "^F-[0-9]{4}-S[0-9]{2}$" },
+    "repositoryPath": { "type": "string", "pattern": "^(?!/)(?![A-Za-z]:)(?!.*\\\\).+" },
+    "pathList": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/repositoryPath" } },
+    "commitOrNull": { "anyOf": [{ "type": "string", "pattern": "^[0-9a-fA-F]{7,64}$" }, { "type": "null" }] },
+    "validationRequirement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "reference", "required"],
+      "properties": {
+        "kind": { "enum": ["command", "unit_test", "instrumentation_test", "single_device_manual", "two_device_manual", "target_device_manual", "diff_check"] },
+        "reference": { "type": "string", "minLength": 1 },
+        "required": { "type": "boolean" }
+      }
+    },
+    "artifactReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "path"],
+      "properties": {
+        "kind": { "enum": ["validation_evidence", "review_record", "completion_report", "log", "diff", "package_report"] },
+        "path": { "$ref": "#/$defs/repositoryPath" }
+      }
+    }
+  }
+}

@@ -1,0 +1,3 @@
+{
+  "schema_version": "1.0", "review_id": "review-dry-run-s03-fail", "task_id": "task-dry-run-review-repair", "reviewer_role": "independent", "reviewed_revision": {"base_commit": null, "result_commit": null}, "verdict": "changes_required", "findings": [{"finding_id": "finding-dry-run-s03", "severity": "major", "category": "validation", "feature_id": null, "scenario_id": null, "location": {"path": null, "line_start": null, "line_end": null}, "problem": "Synthetic review failure.", "evidence": "Synthetic record.", "required_correction": "Record repair and re-review."}], "reviewed_scenario_ids": [], "validation_evidence": [], "unresolved_questions": [], "timestamp": "2026-07-29T14:20:00Z"
+}

@@ -1,0 +1,10 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "$id":"https://inkhelper.local/afd/schemas/execution.schema.json",
+  "title":"AFD Execution Contracts",
+  "$defs": {
+    "taskId":{"type":"string","pattern":"^task-[a-z0-9][a-z0-9-]{0,62}$"},
+    "state":{"enum":["planned","ready","implementing","validating","awaiting_review","repairing","revalidating","checkpointing","completed","blocked","failed","deferred","cancelled"]},
+    "budget":{"type":"object","additionalProperties":false,"required":["implementation_attempts","repair_attempts","review_cycles","validation_retries","checkpoint_attempts","packaging_attempts","root_cause_retries","no_progress_cycles","total_task_attempts","total_review_operations","run_duration_seconds"],"properties":{"implementation_attempts":{"type":"integer","minimum":1},"repair_attempts":{"type":"integer","minimum":1},"review_cycles":{"type":"integer","minimum":1},"validation_retries":{"type":"integer","minimum":1},"checkpoint_attempts":{"type":"integer","minimum":1},"packaging_attempts":{"type":"integer","minimum":1},"root_cause_retries":{"type":"integer","minimum":1},"no_progress_cycles":{"type":"integer","minimum":1},"total_task_attempts":{"type":"integer","minimum":1},"total_review_operations":{"type":"integer","minimum":1},"run_duration_seconds":{"type":"integer","minimum":1}}}
+  }
+}

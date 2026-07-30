@@ -1,0 +1,3 @@
+{
+  "schema_version": "1.0", "review_id": "review-dry-run-s01", "task_id": "task-dry-run-success", "reviewer_role": "self_second_pass", "reviewed_revision": {"base_commit": null, "result_commit": null}, "verdict": "approved", "findings": [], "reviewed_scenario_ids": [], "validation_evidence": [{"path": ".afd/dry-run/sample-validation/s01.json", "status": "passed"}], "unresolved_questions": [], "timestamp": "2026-07-29T14:06:00Z"
+}
